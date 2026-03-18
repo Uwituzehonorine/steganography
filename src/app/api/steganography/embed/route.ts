@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiResponse, EmbedResult } from "@/types";
+import { spawn } from "child_process";
+import path from "path";
+import fs from "fs";
+import { v4 as uuidv4 } from "uuid";
 
 // POST /api/steganography/embed
-// In a real system this would invoke a Python DSP service via a subprocess or
-// internal HTTP call. Here we simulate the algorithm with realistic metrics.
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
-        const { ehrPayload, bitDepth = "16-bit", outputFormat = ".wav" } = body;
+        const formData = await request.formData();
+        const ehrPayload = formData.get("ehrPayload") as string;
+        const audioFile = formData.get("audioFile") as File;
+        const bitDepth = formData.get("bitDepth") as string || "16-bit";
+        const outputFormat = formData.get("outputFormat") as string || ".wav";
 
         if (!ehrPayload || !ehrPayload.trim()) {
             return NextResponse.json(
@@ -16,30 +21,91 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Simulate processing time
-        await new Promise((r) => setTimeout(r, 50));
+        if (!audioFile) {
+            return NextResponse.json(
+                { success: false, error: "Audio carrier file is required" } as ApiResponse,
+                { status: 400 }
+            );
+        }
 
-        // Realistic PSNR / MSE simulation based on Fourfold paradigm
-        const payloadBytes = new TextEncoder().encode(ehrPayload).length;
-        const payloadKb = payloadBytes / 1024;
-        const basePSNR = 126.34;
-        const psnrDegradation = Math.log10(1 + payloadKb) * 8.5;
-        const psnr = Math.max(105, basePSNR - psnrDegradation + (Math.random() * 1 - 0.5));
-        const mse = Math.pow(Math.pow(2, 16) - 1, 2) / Math.pow(10, psnr / 10);
+        const projectRoot = process.cwd();
+        const tempDir = path.join(projectRoot, "public", "temp");
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        const requestId = uuidv4();
+        const inputPath = path.join(tempDir, `${requestId}_input.wav`);
+        const outputPath = path.join(tempDir, `${requestId}_stego.wav`);
+
+        // Save uploaded file
+        const buffer = Buffer.from(await audioFile.arrayBuffer());
+        fs.writeFileSync(inputPath, buffer);
+
+        // Call Python script
+        const pythonScript = path.join(projectRoot, "python", "steganography_service.py");
+        
+        const pythonPromise = new Promise<{success: boolean, data?: any, error?: string}>((resolve) => {
+            const pyProcess = spawn("python3", [
+                pythonScript,
+                "embed",
+                inputPath,
+                ehrPayload,
+                outputPath
+            ]);
+
+            let outputData = "";
+            let errorData = "";
+
+            pyProcess.stdout.on("data", (data) => {
+                outputData += data.toString();
+            });
+
+            pyProcess.stderr.on("data", (data) => {
+                errorData += data.toString();
+            });
+
+            pyProcess.on("close", (code) => {
+                if (code !== 0) {
+                    resolve({ success: false, error: errorData || `Python process exited with code ${code}` });
+                    return;
+                }
+                try {
+                    const result = JSON.parse(outputData);
+                    resolve(result);
+                } catch (e) {
+                    resolve({ success: false, error: "Failed to parse Python output: " + outputData });
+                }
+            });
+        });
+
+        const pythonResult = await pythonPromise;
+
+        if (!pythonResult.success) {
+            return NextResponse.json(
+                { success: false, error: pythonResult.error } as ApiResponse,
+                { status: 500 }
+            );
+        }
 
         const result: EmbedResult = {
-            psnr: psnr.toFixed(2),
-            mse: mse.toFixed(4),
-            carrier: `stego_ehr_${Date.now()}.${outputFormat.replace(".", "")}`,
-            payloadSize: `${(payloadBytes / 1024).toFixed(2)} kb`,
+            psnr: `${pythonResult.data.psnr.toFixed(2)} dB`,
+            mse: pythonResult.data.mse.toFixed(6),
+            carrier: `/temp/${requestId}_stego.wav`,
+            payloadSize: `${(pythonResult.data.payload_size / 1024).toFixed(2)} kb`,
             timestamp: new Date().toISOString(),
-            keyBundle: `KEY-${Math.random().toString(36).substring(2, 18).toUpperCase()}`,
+            keyBundle: pythonResult.data.truekey,
         };
 
+        // Note: In a production app, we'd delete inputPath and eventually outputPath
+        // but for this demo we'll keep the stego file available for download.
+        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+
         return NextResponse.json({ success: true, data: result } as ApiResponse<EmbedResult>);
-    } catch {
+    } catch (error: any) {
+        console.error("Embedding error:", error);
         return NextResponse.json(
-            { success: false, error: "Embedding failed" } as ApiResponse,
+            { success: false, error: `Embedding failed: ${error.message}` } as ApiResponse,
             { status: 500 }
         );
     }

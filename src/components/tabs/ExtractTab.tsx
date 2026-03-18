@@ -24,12 +24,14 @@ export default function ExtractTab() {
     const [logs, setLogs] = useState<{ text: string }[]>([]);
     const [result, setResult] = useState<string | null>(null);
     const [integrity, setIntegrity] = useState<"pending" | "ok" | "fail">("pending");
+    const [stegoFile, setStegoFile] = useState<File | null>(null);
 
     const appendLog = (text: string) => setLogs((p) => [...p, { text }]);
 
     const startExtraction = async () => {
         if (!password.trim()) { alert("Please enter a decryption password."); return; }
         if (!key.trim()) { alert("Please enter the extraction key."); return; }
+        if (!stegoFile) { alert("Please upload a stego audio file."); return; }
 
         setProcessing(true);
         setResult(null);
@@ -38,16 +40,21 @@ export default function ExtractTab() {
         setIntegrity("pending");
 
         for (const step of EXTRACT_STEPS) {
-            await new Promise((r) => setTimeout(r, 300 + Math.random() * 150));
+            await new Promise((r) => setTimeout(r, 200 + Math.random() * 100));
             setProgress(step.pct);
             appendLog(step.log);
         }
 
         try {
+            const formData = new FormData();
+            formData.append("extractionKey", key);
+            formData.append("password", password);
+            formData.append("stegoFile", stegoFile);
+            formData.append("reason", dataType);
+
             const res = await fetch("/api/steganography/extract", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ extractionKey: key, password, reason: dataType }),
+                body: formData,
             });
             const json = await res.json();
             if (json.success) {

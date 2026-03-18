@@ -57,10 +57,19 @@ export default function EmbedTab() {
 
         // Call API
         try {
+            const formData = new FormData();
+            formData.append("ehrPayload", ehrPayload);
+            formData.append("dataType", dataType);
+            formData.append("encoding", encoding);
+            formData.append("bitDepth", bitDepth);
+            formData.append("outputFormat", outputFormat);
+            if (audioFile) {
+                formData.append("audioFile", audioFile);
+            }
+
             const res = await fetch("/api/steganography/embed", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ehrPayload, dataType, encoding, bitDepth, outputFormat }),
+                body: formData,
             });
             const json = await res.json();
             if (json.success) setResult(json.data);
