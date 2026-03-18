@@ -90,7 +90,7 @@ export default function EmbedTab() {
 
     const downloadStego = () => {
         if (!result) return;
-        const content = `STEGO_AUDIO_BUNDLE\nKey: ${encKey}\nPSNR: ${result.psnr}\nMSE: ${result.mse}\nTimestamp: ${result.timestamp}`;
+        const content = `STEGO_AUDIO_BUNDLE\nKey: ${result.keyBundle}\nPSNR: ${result.psnr}\nMSE: ${result.mse}\nTimestamp: ${result.timestamp}`;
         const a = document.createElement("a");
         a.href = `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`;
         a.download = `stego_ehr_${Date.now()}.bundle.txt`;
@@ -288,9 +288,35 @@ export default function EmbedTab() {
                                         <div className="text-xs text-slate-500 font-mono">MSE</div>
                                     </div>
                                 </div>
+
+                                <div className="mb-4">
+                                    <label className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mb-1.5 block">
+                                        Extraction Key Bundle (REQUIRED FOR DECRYPTION)
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            className="input-field font-mono text-[9px] text-teal-300 h-16 leading-tight break-all"
+                                            value={result.keyBundle}
+                                            readOnly
+                                        />
+                                    </div>
+                                    <button 
+                                        className="text-[10px] text-teal-400 font-mono mt-1 hover:text-white transition-colors"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(result.keyBundle);
+                                            alert("Key Bundle copied to clipboard!");
+                                        }}
+                                    >
+                                        [Copy to Clipboard]
+                                    </button>
+                                </div>
+
                                 <button className="btn-primary w-full" onClick={downloadStego}>
-                                    ⬇ Download Stego Audio + Key
+                                    ⬇ Download Stego Bundle (.txt)
                                 </button>
+                                <p className="text-[10px] text-slate-500 mt-2 text-center font-mono">
+                                    Store the key securely. Data cannot be recovered without it.
+                                </p>
                             </div>
                         )}
                     </div>

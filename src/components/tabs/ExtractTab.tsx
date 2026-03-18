@@ -93,7 +93,7 @@ export default function ExtractTab() {
                     <h2 className="font-display font-bold text-white text-lg mb-5">Stego Audio Input</h2>
 
                     <AudioDropZone
-                        onFile={() => { }}
+                        onFile={setStegoFile}
                         label="Drop stego audio file"
                         sublabel="Protected carrier with embedded EHR"
                         className="mb-5"
