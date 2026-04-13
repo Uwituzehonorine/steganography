@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, X, Lock } from "lucide-react";
 import { Tag } from "@/components/ui";
 import { EHRRecord, ExtractResult } from "@/types";
-import { MOCK_RECORDS } from "@/lib/data";
 
 const STATUS_VARIANT: Record<string, "emerald" | "teal" | "amber"> = {
     Protected: "emerald",
@@ -255,13 +254,55 @@ function ExtractModal({
 
 // ── Main Records Tab ────────────────────────────────────────────
 export default function RecordsTab() {
-    const [records, setRecords] = useState<EHRRecord[]>(MOCK_RECORDS);
+    const [records, setRecords] = useState<EHRRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All Types");
     const [statusFilter, setStatusFilter] = useState("All Status");
     const [extractRecord, setExtractRecord] = useState<EHRRecord | null>(null);
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 6;
+
+    // Fetch records from API
+    const fetchRecords = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const params = new URLSearchParams();
+            if (search) params.set('search', search);
+            if (typeFilter !== 'All Types') params.set('type', typeFilter);
+            if (statusFilter !== 'All Status') params.set('status', statusFilter);
+            params.set('page', page.toString());
+            params.set('pageSize', PAGE_SIZE.toString());
+
+            const response = await fetch(`/api/records?${params}`);
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to fetch records');
+            }
+
+            setRecords(result.data.records);
+        } catch (err) {
+            console.error('Failed to fetch records:', err);
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+            setError(errorMessage);
+            setRecords([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch records on component mount and when filters change
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            fetchRecords();
+        }, search ? 300 : 0); // Debounce search
+
+        return () => clearTimeout(timeoutId);
+    }, [search, typeFilter, statusFilter, page]);
 
     const filtered = records.filter((r) => {
         const matchSearch =
@@ -292,6 +333,20 @@ export default function RecordsTab() {
                     All health records protected via audio steganography. Access requires extraction key and decryption password.
                 </p>
             </div>
+
+            {/* Error Display */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                    <div className="text-red-800 font-medium">Error loading records</div>
+                    <div className="text-red-600 text-sm">{error}</div>
+                    <button
+                        onClick={fetchRecords}
+                        className="mt-2 px-3 py-1 bg-red-100 hover:bg-red-200 text-red-800 text-sm rounded transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="glass rounded-2xl p-4 mb-5 flex flex-wrap gap-3 items-center">

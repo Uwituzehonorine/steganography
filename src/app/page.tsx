@@ -39,7 +39,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50">
       <Navbar
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -53,16 +53,18 @@ export default function HomePage() {
         onTabChange={handleTabChange}
       />
 
-      <div className="flex pt-16 min-h-screen">
+      <div className="flex">
         <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
 
-        <main className="flex-1 lg:ml-56 p-4 md:p-6 space-y-6">
-          {activeTab === "embed" && <EmbedTab />}
-          {activeTab === "extract" && <ExtractTab />}
-          {activeTab === "records" && <RecordsTab />}
-          {activeTab === "analytics" && <AnalyticsTab />}
+        <main className="flex-1 lg:ml-56 p-6">
+          <div className="max-w-7xl mx-auto">
+            {activeTab === "embed" && <EmbedTab />}
+            {activeTab === "extract" && <ExtractTab />}
+            {activeTab === "records" && <RecordsTab />}
+            {activeTab === "analytics" && <AnalyticsTab />}
+          </div>
         </main>
       </div>
-    </>
+    </div>
   );
 }

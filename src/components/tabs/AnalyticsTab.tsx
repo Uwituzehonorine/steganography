@@ -1,6 +1,6 @@
 "use client";
 
-import { PSNR_BY_CARRIER, BENCHMARK_DATA } from "@/lib/data";
+import { useState, useEffect } from "react";
 import { Tag } from "@/components/ui";
 
 function MetricBig({ value, label }: { value: React.ReactNode; label: string }) {
@@ -13,6 +13,63 @@ function MetricBig({ value, label }: { value: React.ReactNode; label: string }) 
 }
 
 export default function AnalyticsTab() {
+    const [analyticsData, setAnalyticsData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch analytics data from API
+    const fetchAnalytics = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const response = await fetch('/api/analytics');
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to fetch analytics');
+            }
+
+            setAnalyticsData(result.data);
+        } catch (err) {
+            console.error('Failed to fetch analytics:', err);
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAnalytics();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-slate-400">Loading analytics...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <div className="text-red-800 font-medium mb-2">Error loading analytics</div>
+                <div className="text-red-600 text-sm mb-3">{error}</div>
+                <button
+                    onClick={fetchAnalytics}
+                    className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    if (!analyticsData) {
+        return <div className="text-slate-400">No analytics data available</div>;
+    }
     return (
         <div>
             {/* Header */}
@@ -31,10 +88,10 @@ export default function AnalyticsTab() {
 
             {/* Top Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 fade-in">
-                <MetricBig value={<span className="text-teal-400">128</span>} label="Records Protected" />
-                <MetricBig value={<span className="text-cyan-400">15</span>} label="Audio Carriers" />
-                <MetricBig value={<span className="text-emerald-400">99.9%</span>} label="Recovery Rate" />
-                <MetricBig value={<span className="text-amber-400">0</span>} label="Detected Breaches" />
+                <MetricBig value={<span className="text-teal-400">{analyticsData.totalRecords}</span>} label="Records Protected" />
+                <MetricBig value={<span className="text-cyan-400">{analyticsData.totalCarriers}</span>} label="Audio Carriers" />
+                <MetricBig value={<span className="text-emerald-400">{analyticsData.recoveryRate}</span>} label="Recovery Rate" />
+                <MetricBig value={<span className="text-amber-400">{analyticsData.breaches}</span>} label="Detected Breaches" />
             </div>
 
             {/* PSNR Chart + Carrier Bars */}
@@ -97,7 +154,7 @@ export default function AnalyticsTab() {
                     <h2 className="font-display font-bold text-white mb-1">Avg PSNR by Carrier</h2>
                     <p className="text-xs text-slate-500 font-mono mb-4">Per instrument type</p>
                     <div className="space-y-3">
-                        {PSNR_BY_CARRIER.map((d) => {
+                        {analyticsData.psnrByCarrier?.map((d: any) => {
                             const pct = ((d.val - 109.5) / (112 - 109.5)) * 100;
                             return (
                                 <div key={d.label}>
@@ -116,7 +173,11 @@ export default function AnalyticsTab() {
                     {/* Quick Stats */}
                     <div className="mt-6 space-y-2">
                         <div className="font-mono text-xs text-slate-600 uppercase tracking-widest">Quick Stats</div>
-                        {[{ l: "Avg PSNR", v: "110.65 dB", c: "text-teal-400" }, { l: "Min PSNR", v: "105.72 dB", c: "text-amber-400" }, { l: "Max PSNR", v: "126.34 dB", c: "text-emerald-400" }].map(s => (
+                        {[
+                            { l: "Avg PSNR", v: `${analyticsData.avgPSNR} dB`, c: "text-teal-400" },
+                            { l: "Protected", v: `${analyticsData.protectedRecords}`, c: "text-emerald-400" },
+                            { l: "Recovery", v: `${analyticsData.recoveryRate}`, c: "text-cyan-400" }
+                        ].map(s => (
                             <div key={s.l} className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500">{s.l}</span>
                                 <span className={`font-mono text-xs font-bold ${s.c}`}>{s.v}</span>
@@ -139,7 +200,7 @@ export default function AnalyticsTab() {
                             </tr>
                         </thead>
                         <tbody>
-                            {BENCHMARK_DATA.map((row) => (
+                            {analyticsData.benchmarks?.map((row: any) => (
                                 <tr key={row.method} className={`border-b border-teal-400/05 ${row.isProposed ? "bg-teal-400/[0.03]" : ""}`}>
                                     <td className="py-3 px-3">
                                         <span className={`font-mono text-sm ${row.isProposed ? "text-teal-400 font-bold" : "text-slate-300"}`}>
@@ -151,7 +212,7 @@ export default function AnalyticsTab() {
                                     <td className={`py-3 px-3 text-right font-mono text-sm ${row.isProposed ? "text-teal-400" : "text-slate-400"}`}>{row.maxPayload}</td>
                                     <td className="py-3 px-3">
                                         <div className="flex flex-wrap gap-1">
-                                            {row.features.map((f) => (
+                                            {row.features.map((f: string) => (
                                                 <Tag key={f} variant={row.isProposed ? "teal" : "amber"}>{f}</Tag>
                                             ))}
                                         </div>
